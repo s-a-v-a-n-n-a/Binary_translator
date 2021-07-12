@@ -1,3 +1,48 @@
+/*
+Типы инструкций
+
+Два регистра и, может быть, extended opcode (последнее, видимо, только с командой pop):
+
+message[0] = (REX << 4) | WRXB; 
+if (command_code == CODE_POP_REG)
+{
+	message[1] = OPCODE[CODE_MOV_FROM_MEM];
+}
+else
+{
+	message[1] = OPCODE[CODE_MOV];
+}
+message[2] = (REG_REGADDR << 6) |
+			 (register_number % (MAX_REGISTERS_NUMBER + 1) << 3) |
+			 4;
+message[3] = 0x1e;
+
+
+Один регистр только:
+
+message[0] = (REX << 4) | WRXB; 
+message[1] = OPCODE[CODE_POP_REG] + R11 % (MAX_REGISTERS_NUMBER + 1);
+
+
+Только число:
+
+message[0] = OPCODE[command_code]; + number
+
+
+Расширение и регистр:
+
+message[0] = OPCODE[command_code];
+message[1] = (REG_REGADDR << 6) |
+			 (STACK_COMMANDS_EXTENDED_OPCODES[command_code - CODE_PUSH_IMM] << 3) |
+			 (register_number % (MAX_REGISTERS_NUMBER + 1));
+
+
+Только команда:
+
+message[0] = OPCODE[CODE_CALL];
+*/
+
+
 #include "Instructions_realizations.h"
 
 const int MAX_REGISTERS_NUMBER = 7;
@@ -72,6 +117,24 @@ const unsigned char STACK_COMMANDS_EXTENDED_OPCODES[] =
 	0x00
 };
 
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//new
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+char make_wrxb(char first_register, char second_register)
+{
+	unsigned char WRXB = 0;
+	WRXB |= REX_W;
+	if (first_register <= MAX_REGISTERS_NUMBER && second_register <= MAX_REGISTERS_NUMBER)
+		return WRXB;
+
+	if (first_register > MAX_REGISTERS_NUMBER)
+		WRXB |= REX_R;
+	if (second_register > MAX_REGISTERS_NUMBER)
+		WRXB |= REX_B;
+
+	return WRXB;
+}
+
 Code_state_signs making_stack_register_command(Code_state *state, int command_code, int register_number)
 {
 	assert(command_code == CODE_PUSH_REG || command_code == CODE_POP_REG);
@@ -81,10 +144,16 @@ Code_state_signs making_stack_register_command(Code_state *state, int command_co
 
 	if (register_number > MAX_REGISTERS_NUMBER)
 	{
+		/*
 		unsigned char WRXB = 0;
 		WRXB |= REX_B;
+		*/
+		
+		unsigned char WRXB = make_wrxb(0, MAX_REGISTERS_NUMBER + 1);
+		
 
-		message[0] = (REX << 4) | WRXB; 
+		message[0] = (REX << 4) | WRXB;
+
 		report = copy_phrase(state, message, 1);
 		MAKE_REPORT
 	}
@@ -104,22 +173,31 @@ Code_state_signs making_additional_stack_register_command(Code_state *state, int
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
 
-	unsigned char WRXB = REX_W;
+	//unsigned char WRXB = REX_W;
+	unsigned char WRXB = make_wrxb(0, 0);
 
 	if (command_code == CODE_POP_REG)
 	{
+		/*
 		WRXB = REX_W;
+
+		*/
+		WRXB = make_wrxb(0, 0);
+		
 		
 		report = making_command_mov_imm(state, RAX, R8, sizeof(long long));
 		MAKE_REPORT
 		report = making_simple_arithmetics(state, CODE_SUB, R8, RBX);
 		MAKE_REPORT
 	}
-
+	/*
 	if (register_number > MAX_REGISTERS_NUMBER)
 	{
 		WRXB |= REX_R;
 	}
+	*/
+	WRXB = make_wrxb(register_number, 0);
+	
 
 	message[0] = (REX << 4) | WRXB; 
 	if (command_code == CODE_POP_REG)
@@ -166,8 +244,12 @@ Code_state_signs making_stack_imm_command(Code_state *state, int command_code, i
 	}
 	else
 	{
+		/*
 		unsigned char WRXB = 0;
 		WRXB |= REX_B;
+		*/
+		unsigned char WRXB = make_wrxb(0, R11);
+		
 
 		message[0] = (REX << 4) | WRXB; 
 		message[1] = OPCODE[CODE_POP_REG] + R11 % (MAX_REGISTERS_NUMBER + 1);
@@ -247,9 +329,15 @@ Code_state_signs making_stack_register_address_in_register(Code_state *state, in
 	making_simple_arithmetics(state, CODE_ADD, RDI, register_number);
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
+	
 	if (register_number > MAX_REGISTERS_NUMBER)
 	{
+		//тут должно было быть, видимо, WRXB = REX_W | REX_B
+		/*
 		unsigned char WRXB = REX_B;
+		*/
+		unsigned char WRXB = make_wrxb(0, MAX_REGISTERS_NUMBER + 1);
+		
 
 		message[0] = (REX << 4) | WRXB;
 		report = copy_phrase(state, message, 1);
@@ -275,10 +363,14 @@ Code_state_signs making_left_shift(Code_state *state, int register_number, char 
 	assert(register_number < (MAX_REGISTERS_NUMBER + 1) * 2);
 	CHECKING_POINTERS
 
-	//48 c1 e0 03 shl rax, 3
+	//48 c1 e0 03 shl rax, 3 (example)
+	/*
 	unsigned char WRXB = REX_W;
 	if (register_number > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_B;
+	*/
+	unsigned char WRXB = make_wrxb(0, register_number);
+	
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
 
@@ -352,13 +444,18 @@ Code_state_signs making_command_mov_from_reg(Code_state *state, int register_num
 	CHECKING_POINTERS
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
-
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
 	if (register_number_to > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_B;
 	if (register_number_from > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_R;
+	*/
+	unsigned char WRXB = make_wrxb(register_number_from, register_number_to);
+	
+
+
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[CODE_MOV]; 
 	message[2] = (REG_REG << 6) | 
@@ -377,14 +474,18 @@ Code_state_signs making_command_mov_imm(Code_state *state, int register_number_f
 	CHECKING_POINTERS
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
-
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
 	if (register_number_to > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_B;
-
 	if (register_number_from > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_R;
+	*/
+	unsigned char WRXB = make_wrxb(register_number_from, register_number_to);
+	
+
+
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[CODE_MOV_IMM]; 
 	message[2] = (REG_REG << 6) | 
@@ -408,13 +509,18 @@ Code_state_signs making_command_mov_from_mem(Code_state *state, int operation_co
 	CHECKING_POINTERS
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
-
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
 	if (register_number_to > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_R;
 	if (register_number_from > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_B;
+	*/
+	unsigned char WRXB = make_wrxb(register_number_to, register_number_from);
+	
+
+
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[operation_code]; 
 	message[2] = (mod << 6) | 
@@ -478,13 +584,19 @@ Code_state_signs making_simple_arithmetics(Code_state *state, int operation_code
 	CHECKING_POINTERS
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
-	
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
 	if (first_register > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_R;
 	if (second_register > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_B;
+	*/
+	unsigned char WRXB = make_wrxb(first_register, second_register);
+	
+
+
+
 	message[0] = REX << 4 | WRXB; 
 	message[1] = OPCODE[operation_code]; 
 	message[2] = (REG_REG << 6) | 
@@ -507,9 +619,13 @@ Code_state_signs making_simple_arithmetics_with_stack(Code_state *state, int ope
 	MAKE_REPORT
 	report = making_stack_register_command(state, CODE_POP_REG, RCX);
 	MAKE_REPORT
-
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
+	*/
+	unsigned char WRXB = make_wrxb(0, 0);
+	
+
 
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[operation_code];
@@ -534,9 +650,13 @@ Code_state_signs making_simple_arithmetics_with_additional_stack(Code_state *sta
 	MAKE_REPORT
 	report = making_additional_stack_register_command(state, CODE_POP_REG, RCX);
 	MAKE_REPORT
-
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
+	*/
+	unsigned char WRXB = make_wrxb(0, 0);
+	
+
 
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[operation_code];
@@ -559,9 +679,12 @@ Code_state_signs making_complex_arithmetics(Code_state *state, int mode, int reg
 	CHECKING_POINTERS
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
-
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
+	*/
+	unsigned char WRXB = make_wrxb(0, 0);
+	
 
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[translation_table[mode]]; 
@@ -585,9 +708,14 @@ Code_state_signs making_complex_arithmetics_with_stack(Code_state *state, int mo
 	MAKE_REPORT
 	report = making_stack_register_command(state, CODE_POP_REG, RCX);
 	MAKE_REPORT
-
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
+	*/
+	unsigned char WRXB = make_wrxb(0, 0);
+	
+
+
 
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[translation_table[mode]]; 
@@ -615,8 +743,14 @@ Code_state_signs making_complex_arithmetics_with_additional_stack(Code_state *st
 	report = making_additional_stack_register_command(state, CODE_POP_REG, RCX);
 	MAKE_REPORT
 
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
+	*/
+	unsigned char WRXB = make_wrxb(0, 0);
+	
+
+
 
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[translation_table[mode]]; 
@@ -639,12 +773,18 @@ Code_state_signs making_comparing(Code_state *state, int first_register, int sec
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
 
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
 	if (first_register > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_B;
 	if (second_register > MAX_REGISTERS_NUMBER)
 		WRXB |= REX_R;
+	*/
+	unsigned char WRXB = make_wrxb(second_register, first_register);
+	
+
+
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[CODE_CMP_REGS]; 
 	message[2] = (3 << 6) | 
@@ -668,8 +808,13 @@ Code_state_signs making_comparing_with_stack(Code_state *state)
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
 
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
+	*/
+	unsigned char WRXB = make_wrxb(0, 0);
+	
+
 
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[CODE_CMP_REGS]; 
@@ -694,8 +839,13 @@ Code_state_signs making_comparing_with_additional_stack(Code_state *state)
 
 	unsigned char message[MAX_MESSAGE_LENGTH] = {};
 
+	/*
 	unsigned char WRXB = 0;
 	WRXB |= REX_W;
+	*/
+	unsigned char WRXB = make_wrxb(0, 0);
+	
+
 
 	message[0] = (REX << 4) | WRXB; 
 	message[1] = OPCODE[CODE_CMP_REGS]; 
