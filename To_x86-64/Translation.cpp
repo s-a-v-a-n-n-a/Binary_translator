@@ -45,7 +45,12 @@ const int STACK_PUSH_OFFSETS[] = {10, 2, 2, 2, 2, 0, 10, 2, 2, 2, 2};
  */
 const int STACK_POP_OFFSETS[]  = { 2, 2, 2, 2, 2, 0,  9, 2, 2, 2, 2};
 
+/*
+Отправляют тип Instruction
+В зависимости от rex печатаем первый байт или нет (если что, поставим rex = 0)
+message[0] = (REX << 4) | WRXB; //эта ручная работа уйдёт
 
+*/
 Code_state_signs copy_phrase(Code_state *state, const unsigned char *phrase, const size_t phrase_length)
 {
 	Code_state_signs report = CODE_OK;
@@ -491,4 +496,3 @@ void translation_into_x86_64(const char *file_name, const char *output_file_name
 
 	translation_delete(state, output_file_name);
 }
-
