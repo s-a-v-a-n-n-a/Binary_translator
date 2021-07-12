@@ -96,14 +96,21 @@ typedef enum OPCODE_NAMES
 
 struct Instruction
 {
+	long long value;
+
 	char rex;
 	char wrxb;
 
 	char opcode;
+
+	char registers_amount;
 	char first_register;
 	char second_register;
 
 	char extended_opcode;
+
+	bool extended_opcode_is_needed;
+	bool value_is_needed;
 };
 
 Code_state_signs making_stack_register_command(Code_state *state, int command_code, int register_number);
